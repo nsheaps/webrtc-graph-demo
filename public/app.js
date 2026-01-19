@@ -86,54 +86,54 @@ connectBtn.addEventListener('click', () => {
     }
     
     switch (currentScenario) {
-        case 'direct':
-            // Connect to first available peer
-            if (peers.length > 0 && client.getConnectedPeers().length === 0) {
-                client.connectToPeer(peers[0]);
-                addSystemMessage(`Connecting to ${peers[0]} (Direct P2P)`);
-            }
-            break;
+    case 'direct':
+        // Connect to first available peer
+        if (peers.length > 0 && client.getConnectedPeers().length === 0) {
+            client.connectToPeer(peers[0]);
+            addSystemMessage(`Connecting to ${peers[0]} (Direct P2P)`);
+        }
+        break;
             
-        case 'hub':
-            if (client.isHub) {
-                // Hub connects to all
-                peers.forEach(peerId => {
-                    if (!client.peers.has(peerId)) {
-                        client.connectToPeer(peerId);
-                    }
-                });
-                addSystemMessage('Hub connecting to all available peers');
-            } else {
-                // Client connects to hub - find a hub or connect to first peer
-                peers.forEach(peerId => {
-                    if (!client.peers.has(peerId)) {
-                        client.connectToPeer(peerId);
-                        client.hubId = peerId;
-                        addSystemMessage(`Connecting to hub: ${peerId}`);
-                    }
-                });
-            }
-            break;
-            
-        case 'mesh':
-            // Connect to all peers
+    case 'hub':
+        if (client.isHub) {
+            // Hub connects to all
             peers.forEach(peerId => {
                 if (!client.peers.has(peerId)) {
                     client.connectToPeer(peerId);
                 }
             });
-            addSystemMessage('Connecting to all peers (Full Mesh)');
-            break;
-            
-        case 'complex':
-            // Selectively connect to create a graph
+            addSystemMessage('Hub connecting to all available peers');
+        } else {
+            // Client connects to hub - find a hub or connect to first peer
             peers.forEach(peerId => {
                 if (!client.peers.has(peerId)) {
                     client.connectToPeer(peerId);
+                    client.hubId = peerId;
+                    addSystemMessage(`Connecting to hub: ${peerId}`);
                 }
             });
-            addSystemMessage('Building complex graph topology');
-            break;
+        }
+        break;
+            
+    case 'mesh':
+        // Connect to all peers
+        peers.forEach(peerId => {
+            if (!client.peers.has(peerId)) {
+                client.connectToPeer(peerId);
+            }
+        });
+        addSystemMessage('Connecting to all peers (Full Mesh)');
+        break;
+            
+    case 'complex':
+        // Selectively connect to create a graph
+        peers.forEach(peerId => {
+            if (!client.peers.has(peerId)) {
+                client.connectToPeer(peerId);
+            }
+        });
+        addSystemMessage('Building complex graph topology');
+        break;
     }
 });
 
@@ -298,18 +298,18 @@ function updateScenarioInstructions() {
     let instructions = '';
     
     switch (currentScenario) {
-        case 'direct':
-            instructions = 'Open in 2 tabs. Click "Connect to Peer" in one tab to establish a direct P2P connection.';
-            break;
-        case 'hub':
-            instructions = 'Open in 3+ tabs. Click "Become Hub" in one tab, then "Connect to Peer" in others. Hub relays messages.';
-            break;
-        case 'mesh':
-            instructions = 'Open in 3+ tabs. Click "Connect to Peer" in each tab to form a full mesh. All clients interconnected.';
-            break;
-        case 'complex':
-            instructions = 'Open in 4+ tabs. Connect peers selectively to create multi-hop routes. Messages can jump through 3+ peers.';
-            break;
+    case 'direct':
+        instructions = 'Open in 2 tabs. Click "Connect to Peer" in one tab to establish a direct P2P connection.';
+        break;
+    case 'hub':
+        instructions = 'Open in 3+ tabs. Click "Become Hub" in one tab, then "Connect to Peer" in others. Hub relays messages.';
+        break;
+    case 'mesh':
+        instructions = 'Open in 3+ tabs. Click "Connect to Peer" in each tab to form a full mesh. All clients interconnected.';
+        break;
+    case 'complex':
+        instructions = 'Open in 4+ tabs. Connect peers selectively to create multi-hop routes. Messages can jump through 3+ peers.';
+        break;
     }
     
     addSystemMessage(instructions);

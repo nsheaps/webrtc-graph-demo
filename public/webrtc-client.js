@@ -25,9 +25,15 @@ class WebRTCClient {
         return 'client-' + Math.random().toString(36).substring(2, 11);
     }
     
-    connect() {
-        const protocol = window.location.protocol === 'https:' ? 'wss:' : 'ws:';
-        const wsUrl = `${protocol}//${window.location.host}`;
+    connect(signalingServerUrl = null) {
+        // Use custom signaling server URL if provided, otherwise use same host
+        let wsUrl;
+        if (signalingServerUrl) {
+            wsUrl = signalingServerUrl;
+        } else {
+            const protocol = window.location.protocol === 'https:' ? 'wss:' : 'ws:';
+            wsUrl = `${protocol}//${window.location.host}`;
+        }
         
         this.ws = new WebSocket(wsUrl);
         
@@ -58,16 +64,16 @@ class WebRTCClient {
     
     handleSignalingMessage(data) {
         switch (data.type) {
-            case 'clientList':
-                this.availablePeers = new Set(data.clients.filter(id => id !== this.clientId));
-                if (this.onPeersUpdate) {
-                    this.onPeersUpdate(Array.from(this.availablePeers));
-                }
-                break;
+        case 'clientList':
+            this.availablePeers = new Set(data.clients.filter(id => id !== this.clientId));
+            if (this.onPeersUpdate) {
+                this.onPeersUpdate(Array.from(this.availablePeers));
+            }
+            break;
                 
-            case 'signal':
-                this.handleSignal(data.fromId, data.signal);
-                break;
+        case 'signal':
+            this.handleSignal(data.fromId, data.signal);
+            break;
         }
     }
     

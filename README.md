@@ -117,6 +117,85 @@ Each browser tab runs a WebRTC client that:
 3. **Mesh**: Complete graph with O(n²) connections
 4. **Complex**: Arbitrary graph with routing through intermediaries
 
+## CI/CD Pipeline
+
+This project includes a comprehensive CI/CD pipeline with the following components:
+
+### Continuous Integration
+
+**Linting:**
+- ESLint for JavaScript code quality
+- HTMLHint for HTML validation
+- Stylelint for CSS standards
+
+**Testing:**
+- Jest for unit and integration tests
+- Code coverage reporting
+- Multiple Node.js version testing (16, 18, 20)
+
+**Security:**
+- npm audit for vulnerability scanning
+- CodeQL static analysis
+- Dependency review on pull requests
+
+### Continuous Deployment
+
+- Automatic deployment to GitHub Pages on main branch
+- Static site hosting with client-side code
+- Workflow artifacts for build verification
+
+### Available Scripts
+
+```bash
+# Run linters
+npm run lint              # ESLint
+npm run lint:fix          # Auto-fix ESLint issues
+npm run lint:html         # HTMLHint
+npm run lint:css          # Stylelint
+
+# Run tests
+npm test                  # All tests with coverage
+npm run test:watch        # Watch mode
+npm run test:unit         # Unit tests only
+npm run test:integration  # Integration tests only
+
+# Run full validation
+npm run validate          # Lint + test
+
+# Security checks
+npm run security:audit    # npm audit
+npm run security:check    # Snyk test
+```
+
+### CI Workflows
+
+1. **CI/CD Pipeline** (`deploy.yml`): Main pipeline running on push/PR
+   - Linting
+   - Testing with coverage
+   - Security scanning
+   - Build verification
+   - GitHub Pages deployment (main branch only)
+
+2. **Pull Request Checks** (`pr-checks.yml`): Additional PR validation
+   - Full validation suite
+   - Coverage reporting
+   - Dependency review
+   - Code quality checks
+
+3. **Nightly Build** (`nightly.yml`): Scheduled maintenance
+   - Multi-version Node.js testing
+   - Dependency update detection
+   - Full security audit
+
+### Badges
+
+Add these badges to track CI/CD status:
+
+```markdown
+![CI/CD Pipeline](https://github.com/nsheaps/webrtc-graph-demo/workflows/CI%2FCD%20Pipeline/badge.svg)
+![Test Coverage](https://codecov.io/gh/nsheaps/webrtc-graph-demo/branch/main/graph/badge.svg)
+```
+
 ## License
 
 MIT
