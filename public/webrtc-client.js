@@ -22,7 +22,7 @@ class WebRTCClient {
     }
     
     generateClientId() {
-        return 'client-' + Math.random().toString(36).substr(2, 9);
+        return 'client-' + Math.random().toString(36).substring(2, 11);
     }
     
     connect() {

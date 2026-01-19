@@ -163,9 +163,10 @@ function sendMessage() {
     
     if (!text) return;
     
-    if (currentScenario === 'complex' && target !== 'broadcast' && target.includes('→')) {
+    const PATH_SEPARATOR = ' -> ';
+    if (currentScenario === 'complex' && target !== 'broadcast' && target.includes(PATH_SEPARATOR)) {
         // Parse path for complex routing
-        const pathStr = target.split('→').map(s => s.trim());
+        const pathStr = target.split(PATH_SEPARATOR).map(s => s.trim());
         client.sendMessage(text, null, pathStr);
         addMessage('You', text, 'sent', false, true);
     } else if (target === 'broadcast') {
@@ -238,8 +239,9 @@ function updateMessageTargets(connections) {
     
     // Add complex routing options for scenario 4
     if (currentScenario === 'complex' && connections.length >= 2) {
+        const PATH_SEPARATOR = ' -> ';
         const option = document.createElement('option');
-        option.value = connections[0] + ' → ' + connections[1];
+        option.value = connections[0] + PATH_SEPARATOR + connections[1];
         option.textContent = `Route via ${connections.length} hops`;
         messageTargetEl.appendChild(option);
     }

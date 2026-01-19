@@ -13,6 +13,9 @@ class GraphVisualizer {
         this.damping = 0.8;
         this.centerForce = 0.002;
         
+        // Display settings
+        this.labelMaxLength = 10;
+        
         this.resize();
         window.addEventListener('resize', () => this.resize());
     }
@@ -165,7 +168,7 @@ class GraphVisualizer {
             this.ctx.fillStyle = '#1f2937';
             this.ctx.font = '11px sans-serif';
             this.ctx.textAlign = 'center';
-            const label = clientId.substring(0, 10);
+            const label = clientId.substring(0, this.labelMaxLength);
             this.ctx.fillText(label, node.x, node.y + radius + 14);
         });
     }
