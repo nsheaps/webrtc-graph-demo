@@ -292,3 +292,151 @@ h3 {
 .message-text {
     color: #1f2937;
 }
+
+/* Room Section Styles */
+.room-section {
+    padding: 40px;
+    text-align: center;
+    background: #f9fafb;
+}
+
+.room-section h2 {
+    font-size: 24px;
+    margin-bottom: 10px;
+}
+
+.room-section p {
+    color: #6b7280;
+    margin-bottom: 20px;
+}
+
+.room-controls {
+    display: flex;
+    justify-content: center;
+    gap: 10px;
+    margin-bottom: 15px;
+}
+
+#roomInput {
+    padding: 12px 16px;
+    border: 2px solid #e5e7eb;
+    border-radius: 8px;
+    font-size: 16px;
+    width: 300px;
+}
+
+#roomInput:focus {
+    outline: none;
+    border-color: #667eea;
+}
+
+.action-btn.primary {
+    background: #10b981;
+    padding: 12px 24px;
+    font-size: 16px;
+}
+
+.action-btn.primary:hover {
+    background: #059669;
+}
+
+.action-btn.small {
+    padding: 6px 12px;
+    font-size: 12px;
+    background: #ef4444;
+}
+
+.action-btn.small:hover {
+    background: #dc2626;
+}
+
+.hint {
+    font-size: 13px;
+    color: #9ca3af;
+    font-style: italic;
+}
+
+/* Room Info Section */
+.room-info {
+    display: flex;
+    justify-content: space-between;
+    align-items: center;
+    background: white;
+    padding: 12px 16px;
+    border-radius: 8px;
+    border: 1px solid #e5e7eb;
+}
+
+.room-info h3 {
+    margin-bottom: 0;
+    font-size: 14px;
+}
+
+/* Peer Status Badge */
+.peer-status {
+    padding: 2px 8px;
+    border-radius: 4px;
+    font-size: 11px;
+    font-weight: 500;
+}
+
+.peer-status.connected {
+    background: #dcfce7;
+    color: #166534;
+}
+
+/* Subtitle */
+.subtitle {
+    font-size: 14px;
+    opacity: 0.9;
+    margin-bottom: 15px;
+}
+
+/* Footer */
+footer {
+    padding: 20px;
+    text-align: center;
+    background: #f9fafb;
+    border-top: 1px solid #e5e7eb;
+}
+
+footer p {
+    font-size: 13px;
+    color: #6b7280;
+    margin-bottom: 5px;
+}
+
+footer a {
+    color: #667eea;
+    text-decoration: none;
+}
+
+footer a:hover {
+    text-decoration: underline;
+}
+
+/* Responsive Design */
+@media (width <= 900px) {
+    .main-content {
+        grid-template-columns: 1fr;
+    }
+
+    .left-panel {
+        border-right: none;
+        border-bottom: 1px solid #e5e7eb;
+    }
+
+    .message-controls {
+        grid-template-columns: 1fr;
+    }
+
+    .room-controls {
+        flex-direction: column;
+        align-items: center;
+    }
+
+    #roomInput {
+        width: 100%;
+        max-width: 300px;
+    }
+}

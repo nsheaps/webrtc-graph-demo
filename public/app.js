@@ -1,17 +1,25 @@
 // Application state
-const client = new WebRTCClient();
-const visualizer = new GraphVisualizer('graphCanvas');
+let client = null;
+let visualizer = null;
 let currentScenario = 'direct';
 
 // Scenario descriptions
 const scenarioDescriptions = {
-    'direct': 'Two clients connect directly to each other for peer-to-peer communication.',
+    'direct': 'All peers in the room can communicate directly. Messages are sent peer-to-peer.',
     'hub': 'Multiple clients connect to a central hub that relays messages between them. One client acts as the hub.',
     'mesh': 'All clients connect to every other client, forming a full mesh network. Messages can be sent directly to any peer.',
     'complex': 'A multi-hop network where messages can be routed through intermediate peers to reach distant clients.'
 };
 
-// DOM elements
+// DOM elements - Room section
+const roomSectionEl = document.getElementById('roomSection');
+const mainContentEl = document.getElementById('mainContent');
+const roomInputEl = document.getElementById('roomInput');
+const joinRoomBtnEl = document.getElementById('joinRoomBtn');
+const leaveRoomBtnEl = document.getElementById('leaveRoomBtn');
+const currentRoomEl = document.getElementById('currentRoom');
+
+// DOM elements - Main app
 const clientIdEl = document.getElementById('clientId');
 const statusEl = document.getElementById('status');
 const peerCountEl = document.getElementById('peerCount');
@@ -23,130 +31,155 @@ const messageInputEl = document.getElementById('messageInput');
 const messageTargetEl = document.getElementById('messageTarget');
 const currentScenarioEl = document.getElementById('currentScenario');
 const scenarioDescriptionEl = document.getElementById('scenarioDescription');
-const connectBtn = document.getElementById('connectBtn');
-const disconnectBtn = document.getElementById('disconnectBtn');
 const becomeHubBtn = document.getElementById('becomeHubBtn');
 const sendBtn = document.getElementById('sendBtn');
 
-// Initialize client
-client.onStatusChange = (status) => {
-    statusEl.textContent = status.charAt(0).toUpperCase() + status.slice(1);
-    statusEl.className = 'status ' + status;
-};
+// Check for room in URL hash
+function getRoomFromUrl() {
+    const hash = window.location.hash.slice(1);
+    if (hash) {
+        return decodeURIComponent(hash);
+    }
+    return null;
+}
 
-client.onPeersUpdate = (peers) => {
-    peerCountEl.textContent = peers.length;
-    updatePeerList(peers);
-    updateGraph();
-};
+// Set room in URL hash
+function setRoomInUrl(roomName) {
+    window.location.hash = encodeURIComponent(roomName);
+}
 
-client.onConnectionsUpdate = (connections) => {
-    connectionCountEl.textContent = connections.length;
-    updateConnectionList(connections);
-    updateMessageTargets(connections);
-    updateGraph();
-};
+// Initialize and join room
+async function joinRoom(roomName) {
+    if (!roomName || roomName.trim() === '') {
+        addSystemMessage('Please enter a room name.');
+        return;
+    }
 
-client.onMessage = (message) => {
-    addMessage(message.from, message.text, 'received', message.broadcast, message.routed);
-};
+    roomName = roomName.trim();
+    setRoomInUrl(roomName);
 
-// Set client ID and connect
-clientIdEl.textContent = client.clientId;
-visualizer.setMyClient(client.clientId);
-client.connect();
+    // Show loading state
+    joinRoomBtnEl.textContent = 'Connecting...';
+    joinRoomBtnEl.disabled = true;
+
+    // Create new client instance
+    client = new WebRTCClient();
+    visualizer = new GraphVisualizer('graphCanvas');
+
+    // Set up event handlers
+    client.onStatusChange = (status) => {
+        statusEl.textContent = status.charAt(0).toUpperCase() + status.slice(1);
+        statusEl.className = 'status ' + status;
+
+        if (status === 'connected') {
+            // Show main content, hide room section
+            roomSectionEl.style.display = 'none';
+            mainContentEl.style.display = 'flex';
+            currentRoomEl.textContent = roomName;
+            clientIdEl.textContent = client.getSelfId().substring(0, 12) + '...';
+            visualizer.setMyClient(client.getSelfId());
+
+            addSystemMessage('Welcome to WebRTC Graph Demo!');
+            addSystemMessage(`Connected to room: ${roomName}`);
+            updateScenarioInstructions();
+        }
+    };
+
+    client.onPeersUpdate = (peers) => {
+        peerCountEl.textContent = peers.length;
+        updatePeerList(peers);
+        updateGraph();
+    };
+
+    client.onConnectionsUpdate = (connections) => {
+        connectionCountEl.textContent = connections.length;
+        updateConnectionList(connections);
+        updateMessageTargets(connections);
+        updateGraph();
+    };
+
+    client.onMessage = (message) => {
+        addMessage(message.from, message.text, 'received', message.broadcast, message.routed);
+    };
+
+    // Connect to the room
+    try {
+        await client.connect(roomName);
+    } catch (error) {
+        console.error('Failed to join room:', error);
+        addSystemMessage('Failed to join room. Please try again.');
+        joinRoomBtnEl.textContent = 'Join Room';
+        joinRoomBtnEl.disabled = false;
+    }
+}
+
+// Leave room
+function leaveRoom() {
+    if (client) {
+        client.disconnectAll();
+        client = null;
+    }
+
+    // Reset UI
+    roomSectionEl.style.display = 'block';
+    mainContentEl.style.display = 'none';
+    joinRoomBtnEl.textContent = 'Join Room';
+    joinRoomBtnEl.disabled = false;
+    clientIdEl.textContent = 'Not connected';
+    statusEl.textContent = 'Disconnected';
+    statusEl.className = 'status disconnected';
+    peerCountEl.textContent = '0';
+    connectionCountEl.textContent = '0';
+    peerListEl.innerHTML = '';
+    connectionListEl.innerHTML = '';
+    messageLogEl.innerHTML = '';
+    currentRoomEl.textContent = '-';
+
+    // Clear URL hash
+    window.location.hash = '';
+}
+
+// Event listeners for room section
+joinRoomBtnEl.addEventListener('click', () => {
+    joinRoom(roomInputEl.value);
+});
+
+roomInputEl.addEventListener('keypress', (e) => {
+    if (e.key === 'Enter') {
+        joinRoom(roomInputEl.value);
+    }
+});
+
+leaveRoomBtnEl.addEventListener('click', leaveRoom);
 
 // Scenario selection
 document.querySelectorAll('.scenario-btn').forEach(btn => {
     btn.addEventListener('click', () => {
         document.querySelectorAll('.scenario-btn').forEach(b => b.classList.remove('active'));
         btn.classList.add('active');
-        
+
         currentScenario = btn.dataset.scenario;
-        client.setScenario(currentScenario);
-        
+        if (client) {
+            client.setScenario(currentScenario);
+        }
+
         currentScenarioEl.textContent = btn.textContent.trim();
         scenarioDescriptionEl.textContent = scenarioDescriptions[currentScenario];
-        
+
         // Show/hide hub button
         becomeHubBtn.style.display = currentScenario === 'hub' ? 'block' : 'none';
-        
+
         addSystemMessage(`Switched to scenario: ${btn.textContent.trim()}`);
         updateScenarioInstructions();
     });
 });
 
-// Connect button - behavior depends on scenario
-connectBtn.addEventListener('click', () => {
-    const peers = Array.from(client.availablePeers);
-    
-    if (peers.length === 0) {
-        addSystemMessage('No peers available. Open this page in another tab or browser.');
-        return;
-    }
-    
-    switch (currentScenario) {
-    case 'direct':
-        // Connect to first available peer
-        if (peers.length > 0 && client.getConnectedPeers().length === 0) {
-            client.connectToPeer(peers[0]);
-            addSystemMessage(`Connecting to ${peers[0]} (Direct P2P)`);
-        }
-        break;
-            
-    case 'hub':
-        if (client.isHub) {
-            // Hub connects to all
-            peers.forEach(peerId => {
-                if (!client.peers.has(peerId)) {
-                    client.connectToPeer(peerId);
-                }
-            });
-            addSystemMessage('Hub connecting to all available peers');
-        } else {
-            // Client connects to hub - find a hub or connect to first peer
-            peers.forEach(peerId => {
-                if (!client.peers.has(peerId)) {
-                    client.connectToPeer(peerId);
-                    client.hubId = peerId;
-                    addSystemMessage(`Connecting to hub: ${peerId}`);
-                }
-            });
-        }
-        break;
-            
-    case 'mesh':
-        // Connect to all peers
-        peers.forEach(peerId => {
-            if (!client.peers.has(peerId)) {
-                client.connectToPeer(peerId);
-            }
-        });
-        addSystemMessage('Connecting to all peers (Full Mesh)');
-        break;
-            
-    case 'complex':
-        // Selectively connect to create a graph
-        peers.forEach(peerId => {
-            if (!client.peers.has(peerId)) {
-                client.connectToPeer(peerId);
-            }
-        });
-        addSystemMessage('Building complex graph topology');
-        break;
-    }
-});
-
-// Disconnect all
-disconnectBtn.addEventListener('click', () => {
-    client.disconnectAll();
-    addSystemMessage('Disconnected from all peers');
-});
-
 // Become hub
 becomeHubBtn.addEventListener('click', () => {
-    client.becomeHub();
-    addSystemMessage('You are now a HUB. Connect to peers to relay messages.');
+    if (client) {
+        client.becomeHub();
+        addSystemMessage('You are now a HUB. Other peers will relay messages through you.');
+    }
 });
 
 // Send message
@@ -158,11 +191,13 @@ messageInputEl.addEventListener('keypress', (e) => {
 });
 
 function sendMessage() {
+    if (!client) return;
+
     const text = messageInputEl.value.trim();
     const target = messageTargetEl.value;
-    
+
     if (!text) return;
-    
+
     const PATH_SEPARATOR = ' -> ';
     if (currentScenario === 'complex' && target !== 'broadcast' && target.includes(PATH_SEPARATOR)) {
         // Parse path for complex routing
@@ -176,52 +211,49 @@ function sendMessage() {
         client.sendMessage(text, target);
         addMessage('You', text, 'sent', false);
     }
-    
+
     messageInputEl.value = '';
 }
 
 function updatePeerList(peers) {
     peerListEl.innerHTML = '';
-    
+
     if (peers.length === 0) {
-        peerListEl.innerHTML = '<div style="padding: 8px; color: #9ca3af; font-size: 12px;">No other clients online</div>';
+        peerListEl.innerHTML = '<div style="padding: 8px; color: #9ca3af; font-size: 12px;">No other peers in this room yet</div>';
         return;
     }
-    
+
     peers.forEach(peerId => {
-        const isConnected = client.peers.has(peerId);
         const div = document.createElement('div');
         div.className = 'peer-item';
-        
+
         const span = document.createElement('span');
         span.textContent = peerId.substring(0, 15) + '...';
-        
-        const btn = document.createElement('button');
-        btn.textContent = isConnected ? 'Connected' : 'Connect';
-        btn.disabled = isConnected;
-        btn.onclick = () => {
-            client.connectToPeer(peerId);
-            addSystemMessage(`Connecting to ${peerId}`);
-        };
-        
+        span.title = peerId;
+
+        const statusSpan = document.createElement('span');
+        statusSpan.className = 'peer-status connected';
+        statusSpan.textContent = 'Connected';
+
         div.appendChild(span);
-        div.appendChild(btn);
+        div.appendChild(statusSpan);
         peerListEl.appendChild(div);
     });
 }
 
 function updateConnectionList(connections) {
     connectionListEl.innerHTML = '';
-    
+
     if (connections.length === 0) {
         connectionListEl.innerHTML = '<div style="padding: 8px; color: #9ca3af; font-size: 12px;">No active connections</div>';
         return;
     }
-    
+
     connections.forEach(peerId => {
         const div = document.createElement('div');
         div.className = 'connection-item';
-        div.textContent = '🔗 ' + peerId.substring(0, 20) + '...';
+        div.textContent = peerId.substring(0, 20) + '...';
+        div.title = peerId;
         connectionListEl.appendChild(div);
     });
 }
@@ -229,14 +261,14 @@ function updateConnectionList(connections) {
 function updateMessageTargets(connections) {
     const currentValue = messageTargetEl.value;
     messageTargetEl.innerHTML = '<option value="broadcast">Broadcast to All</option>';
-    
+
     connections.forEach(peerId => {
         const option = document.createElement('option');
         option.value = peerId;
         option.textContent = `DM: ${peerId.substring(0, 15)}...`;
         messageTargetEl.appendChild(option);
     });
-    
+
     // Add complex routing options for scenario 4
     if (currentScenario === 'complex' && connections.length >= 2) {
         const PATH_SEPARATOR = ' -> ';
@@ -245,7 +277,7 @@ function updateMessageTargets(connections) {
         option.textContent = `Route via ${connections.length} hops`;
         messageTargetEl.appendChild(option);
     }
-    
+
     // Restore previous selection if still valid
     const options = Array.from(messageTargetEl.options);
     if (options.some(opt => opt.value === currentValue)) {
@@ -256,25 +288,26 @@ function updateMessageTargets(connections) {
 function addMessage(from, text, type, broadcast = false, routed = false) {
     const div = document.createElement('div');
     div.className = `message ${type}`;
-    
+
     const header = document.createElement('div');
     header.className = 'message-header';
-    
+
     let prefix = '';
-    if (broadcast) prefix = '📢 Broadcast - ';
-    if (routed) prefix = '🔀 Routed - ';
-    
-    header.textContent = prefix + from;
-    
+    if (broadcast) prefix = 'Broadcast - ';
+    if (routed) prefix = 'Routed - ';
+
+    const fromDisplay = from === 'You' ? from : from.substring(0, 12) + '...';
+    header.textContent = prefix + fromDisplay;
+
     const time = document.createElement('span');
     time.className = 'message-time';
     time.textContent = new Date().toLocaleTimeString();
     header.appendChild(time);
-    
+
     const textDiv = document.createElement('div');
     textDiv.className = 'message-text';
     textDiv.textContent = text;
-    
+
     div.appendChild(header);
     div.appendChild(textDiv);
     messageLogEl.appendChild(div);
@@ -284,11 +317,11 @@ function addMessage(from, text, type, broadcast = false, routed = false) {
 function addSystemMessage(text) {
     const div = document.createElement('div');
     div.className = 'message system';
-    
+
     const textDiv = document.createElement('div');
     textDiv.className = 'message-text';
     textDiv.textContent = text;
-    
+
     div.appendChild(textDiv);
     messageLogEl.appendChild(div);
     messageLogEl.scrollTop = messageLogEl.scrollHeight;
@@ -296,41 +329,48 @@ function addSystemMessage(text) {
 
 function updateScenarioInstructions() {
     let instructions = '';
-    
+
     switch (currentScenario) {
     case 'direct':
-        instructions = 'Open in 2 tabs. Click "Connect to Peer" in one tab to establish a direct P2P connection.';
+        instructions = 'Open in 2+ tabs with the same room name. Peers auto-connect when they join the same room.';
         break;
     case 'hub':
-        instructions = 'Open in 3+ tabs. Click "Become Hub" in one tab, then "Connect to Peer" in others. Hub relays messages.';
+        instructions = 'Open in 3+ tabs. Click "Become Hub" in one tab. Hub will relay messages to all other peers.';
         break;
     case 'mesh':
-        instructions = 'Open in 3+ tabs. Click "Connect to Peer" in each tab to form a full mesh. All clients interconnected.';
+        instructions = 'Open in 3+ tabs. All peers auto-connect in a full mesh. Send messages to any peer.';
         break;
     case 'complex':
-        instructions = 'Open in 4+ tabs. Connect peers selectively to create multi-hop routes. Messages can jump through 3+ peers.';
+        instructions = 'Open in 4+ tabs. Use "Route via N hops" to send messages through intermediate peers.';
         break;
     }
-    
+
     addSystemMessage(instructions);
 }
 
 function updateGraph() {
+    if (!client || !visualizer) return;
+
     // Collect all clients and connections
-    const allClients = new Set([client.clientId]);
-    client.availablePeers.forEach(peer => allClients.add(peer));
-    
+    const selfId = client.getSelfId();
+    const allClients = new Set([selfId]);
+    client.getConnectedPeers().forEach(peer => allClients.add(peer));
+
     const connections = [];
     client.getConnectedPeers().forEach(peerId => {
         connections.push({
-            from: client.clientId,
+            from: selfId,
             to: peerId
         });
     });
-    
-    visualizer.updateGraph(Array.from(allClients), connections, client.clientId);
+
+    visualizer.updateGraph(Array.from(allClients), connections, selfId);
 }
 
-// Initial instructions
-addSystemMessage('Welcome to WebRTC Graph Demo!');
-updateScenarioInstructions();
+// Check if there's a room in the URL on page load
+const urlRoom = getRoomFromUrl();
+if (urlRoom) {
+    roomInputEl.value = urlRoom;
+    // Auto-join after a short delay to let the page fully load
+    setTimeout(() => joinRoom(urlRoom), 100);
+}

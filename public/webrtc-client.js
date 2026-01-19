@@ -1,237 +1,158 @@
+// WebRTC Client using Trystero for serverless signaling
+// Uses Nostr relays for peer discovery and signaling - no server required
+
+// Configuration constants
+const ANNOUNCE_DELAY_MS = 1000; // Delay before announcing client ID to room
+
 class WebRTCClient {
     constructor() {
         this.clientId = this.generateClientId();
-        this.ws = null;
-        this.peers = new Map(); // peerId -> RTCPeerConnection
-        this.dataChannels = new Map(); // peerId -> RTCDataChannel
+        this.room = null;
+        this.peers = new Map(); // peerId -> connection info
+        this.dataChannels = new Map(); // peerId -> { sendChat, sendRelay, sendRoute }
         this.availablePeers = new Set();
         this.isHub = false;
         this.hubId = null;
         this.scenario = 'direct';
-        
+        this.roomName = null;
+
         this.onPeersUpdate = null;
         this.onConnectionsUpdate = null;
         this.onMessage = null;
         this.onStatusChange = null;
-        
-        this.iceServers = {
-            iceServers: [
-                { urls: 'stun:stun.l.google.com:19302' }
-            ]
-        };
+
+        // Trystero actions will be initialized when joining a room
+        this.sendChat = null;
+        this.sendRelay = null;
+        this.sendRoute = null;
     }
-    
+
     generateClientId() {
         return 'client-' + Math.random().toString(36).substring(2, 11);
     }
-    
-    connect(signalingServerUrl = null) {
-        // Use custom signaling server URL if provided, otherwise use same host
-        let wsUrl;
-        if (signalingServerUrl) {
-            wsUrl = signalingServerUrl;
-        } else {
-            const protocol = window.location.protocol === 'https:' ? 'wss:' : 'ws:';
-            wsUrl = `${protocol}//${window.location.host}`;
-        }
-        
-        this.ws = new WebSocket(wsUrl);
-        
-        this.ws.onopen = () => {
-            console.log('Connected to signaling server');
-            this.ws.send(JSON.stringify({
-                type: 'register',
-                clientId: this.clientId
-            }));
-            
+
+    async connect(roomName = 'webrtc-graph-demo-default') {
+        this.roomName = roomName;
+
+        try {
+            // Dynamic import of Trystero from CDN
+            const { joinRoom } = await import('https://esm.run/trystero');
+
+            // Join room with unique app ID
+            const config = {
+                appId: 'webrtc-graph-demo-v1'
+            };
+
+            this.room = joinRoom(config, roomName);
+
+            // Set up peer event handlers
+            this.room.onPeerJoin(this.handlePeerJoin.bind(this));
+            this.room.onPeerLeave(this.handlePeerLeave.bind(this));
+
+            // Create actions for different message types
+            [this.sendChat, this.receiveChat] = this.room.makeAction('chat');
+            [this.sendRelay, this.receiveRelay] = this.room.makeAction('relay');
+            [this.sendRoute, this.receiveRoute] = this.room.makeAction('route');
+            [this.sendMeta, this.receiveMeta] = this.room.makeAction('meta');
+
+            // Set up message receivers
+            this.receiveChat((data, peerId) => this.handleChatMessage(peerId, data));
+            this.receiveRelay((data, peerId) => this.handleRelayMessage(peerId, data));
+            this.receiveRoute((data, peerId) => this.handleRouteMessage(peerId, data));
+            this.receiveMeta((data, peerId) => this.handleMetaMessage(peerId, data));
+
+            console.log('Connected to room:', roomName);
+
             if (this.onStatusChange) {
                 this.onStatusChange('connected');
             }
-        };
-        
-        this.ws.onmessage = (event) => {
-            const data = JSON.parse(event.data);
-            this.handleSignalingMessage(data);
-        };
-        
-        this.ws.onclose = () => {
-            console.log('Disconnected from signaling server');
+
+            // Broadcast our client ID to the room after a short delay
+            // to allow connections to stabilize
+            setTimeout(() => {
+                if (this.sendMeta) {
+                    this.sendMeta({ type: 'announce', clientId: this.clientId });
+                }
+            }, ANNOUNCE_DELAY_MS);
+
+        } catch (error) {
+            console.error('Failed to connect:', error);
             if (this.onStatusChange) {
                 this.onStatusChange('disconnected');
             }
-        };
-    }
-    
-    handleSignalingMessage(data) {
-        switch (data.type) {
-        case 'clientList':
-            this.availablePeers = new Set(data.clients.filter(id => id !== this.clientId));
-            if (this.onPeersUpdate) {
-                this.onPeersUpdate(Array.from(this.availablePeers));
-            }
-            break;
-                
-        case 'signal':
-            this.handleSignal(data.fromId, data.signal);
-            break;
         }
     }
-    
-    async handleSignal(fromId, signal) {
-        if (signal.type === 'offer') {
-            await this.handleOffer(fromId, signal.offer);
-        } else if (signal.type === 'answer') {
-            await this.handleAnswer(fromId, signal.answer);
-        } else if (signal.type === 'ice-candidate') {
-            await this.handleIceCandidate(fromId, signal.candidate);
+
+    handlePeerJoin(peerId) {
+        console.log('Peer joined:', peerId);
+        this.availablePeers.add(peerId);
+        this.peers.set(peerId, { connected: true });
+        this.dataChannels.set(peerId, true); // Mark as connected
+
+        if (this.onPeersUpdate) {
+            this.onPeersUpdate(Array.from(this.availablePeers));
+        }
+
+        this.updateConnections();
+
+        // Send our client ID to the new peer
+        if (this.sendMeta) {
+            this.sendMeta({ type: 'announce', clientId: this.clientId }, peerId);
         }
     }
-    
-    async connectToPeer(peerId) {
-        if (this.peers.has(peerId)) {
-            console.log('Already connected to', peerId);
-            return;
+
+    handlePeerLeave(peerId) {
+        console.log('Peer left:', peerId);
+        this.availablePeers.delete(peerId);
+        this.peers.delete(peerId);
+        this.dataChannels.delete(peerId);
+
+        if (this.onPeersUpdate) {
+            this.onPeersUpdate(Array.from(this.availablePeers));
         }
-        
-        console.log('Initiating connection to', peerId);
-        
-        const pc = new RTCPeerConnection(this.iceServers);
-        this.peers.set(peerId, pc);
-        
-        // Create data channel
-        const dc = pc.createDataChannel('data');
-        this.setupDataChannel(peerId, dc);
-        
-        // Handle ICE candidates
-        pc.onicecandidate = (event) => {
-            if (event.candidate) {
-                this.sendSignal(peerId, {
-                    type: 'ice-candidate',
-                    candidate: event.candidate
-                });
-            }
-        };
-        
-        // Create and send offer
-        const offer = await pc.createOffer();
-        await pc.setLocalDescription(offer);
-        
-        this.sendSignal(peerId, {
-            type: 'offer',
-            offer: offer
-        });
-        
+
         this.updateConnections();
     }
-    
-    async handleOffer(fromId, offer) {
-        console.log('Received offer from', fromId);
-        
-        const pc = new RTCPeerConnection(this.iceServers);
-        this.peers.set(fromId, pc);
-        
-        // Handle data channel
-        pc.ondatachannel = (event) => {
-            this.setupDataChannel(fromId, event.channel);
-        };
-        
-        // Handle ICE candidates
-        pc.onicecandidate = (event) => {
-            if (event.candidate) {
-                this.sendSignal(fromId, {
-                    type: 'ice-candidate',
-                    candidate: event.candidate
-                });
-            }
-        };
-        
-        await pc.setRemoteDescription(new RTCSessionDescription(offer));
-        
-        const answer = await pc.createAnswer();
-        await pc.setLocalDescription(answer);
-        
-        this.sendSignal(fromId, {
-            type: 'answer',
-            answer: answer
-        });
-        
-        this.updateConnections();
-    }
-    
-    async handleAnswer(fromId, answer) {
-        console.log('Received answer from', fromId);
-        const pc = this.peers.get(fromId);
-        if (pc) {
-            await pc.setRemoteDescription(new RTCSessionDescription(answer));
+
+    handleMetaMessage(peerId, data) {
+        if (data.type === 'announce') {
+            console.log('Peer announced:', data.clientId, 'from', peerId);
+            // Store the friendly client ID mapping if needed
         }
     }
-    
-    async handleIceCandidate(fromId, candidate) {
-        const pc = this.peers.get(fromId);
-        if (pc) {
-            await pc.addIceCandidate(new RTCIceCandidate(candidate));
+
+    handleChatMessage(fromId, message) {
+        if (this.onMessage) {
+            this.onMessage({
+                from: fromId,
+                text: message.text,
+                broadcast: message.broadcast || false
+            });
         }
     }
-    
-    setupDataChannel(peerId, channel) {
-        this.dataChannels.set(peerId, channel);
-        
-        channel.onopen = () => {
-            console.log('Data channel opened with', peerId);
-            this.updateConnections();
-        };
-        
-        channel.onclose = () => {
-            console.log('Data channel closed with', peerId);
-            this.dataChannels.delete(peerId);
-            this.updateConnections();
-        };
-        
-        channel.onmessage = (event) => {
-            const message = JSON.parse(event.data);
-            this.handleDataMessage(peerId, message);
-        };
-    }
-    
-    handleDataMessage(fromId, message) {
-        if (message.type === 'relay' && this.isHub) {
-            // Hub relays messages
-            this.relayMessage(fromId, message);
-        } else if (message.type === 'route') {
-            // Multi-hop routing
-            this.routeMessage(fromId, message);
-        } else if (message.type === 'chat') {
-            // Direct message
-            if (this.onMessage) {
-                this.onMessage({
-                    from: fromId,
-                    text: message.text,
-                    broadcast: message.broadcast || false
-                });
-            }
+
+    handleRelayMessage(fromId, message) {
+        if (this.isHub) {
+            // Hub relays messages to all other connected peers
+            this.availablePeers.forEach(peerId => {
+                if (peerId !== fromId) {
+                    this.sendChat({
+                        text: message.text,
+                        from: fromId,
+                        broadcast: true
+                    }, peerId);
+                }
+            });
         }
     }
-    
-    relayMessage(fromId, message) {
-        // Hub relays message to all other connected peers
-        this.dataChannels.forEach((channel, peerId) => {
-            if (peerId !== fromId && channel.readyState === 'open') {
-                channel.send(JSON.stringify({
-                    type: 'chat',
-                    text: message.text,
-                    from: fromId,
-                    broadcast: true
-                }));
-            }
-        });
-    }
-    
-    routeMessage(fromId, message) {
+
+    handleRouteMessage(fromId, message) {
         if (message.path && message.path.length > 0) {
             const nextHop = message.path[0];
             const newPath = message.path.slice(1);
-            
-            if (nextHop === this.clientId && newPath.length === 0) {
+
+            // Check if the message is for us (we're the next hop and no more hops left)
+            if (nextHop === this.room?.selfId && newPath.length === 0) {
                 // Message reached destination
                 if (this.onMessage) {
                     this.onMessage({
@@ -241,115 +162,111 @@ class WebRTCClient {
                         routed: true
                     });
                 }
-            } else if (newPath.length > 0) {
+            } else if (this.availablePeers.has(nextHop)) {
                 // Forward to next hop
-                const channel = this.dataChannels.get(nextHop);
-                if (channel && channel.readyState === 'open') {
-                    channel.send(JSON.stringify({
-                        type: 'route',
-                        text: message.text,
-                        originalFrom: message.originalFrom,
-                        path: newPath
-                    }));
-                }
+                this.sendRoute({
+                    text: message.text,
+                    originalFrom: message.originalFrom,
+                    path: newPath
+                }, nextHop);
             }
         }
     }
-    
+
+    // Connect to a specific peer - in Trystero, peers are automatically connected
+    // This is kept for API compatibility
+    async connectToPeer(peerId) {
+        if (this.dataChannels.has(peerId)) {
+            console.log('Already connected to', peerId);
+            return;
+        }
+
+        console.log('Connection to peer', peerId, 'is automatic in Trystero');
+        this.updateConnections();
+    }
+
     sendMessage(text, targetId = null, path = null) {
         if (this.scenario === 'hub' && !this.isHub) {
             // Client in hub-spoke sends to hub
-            if (this.hubId && this.dataChannels.has(this.hubId)) {
-                const channel = this.dataChannels.get(this.hubId);
-                if (channel.readyState === 'open') {
-                    channel.send(JSON.stringify({
-                        type: 'relay',
-                        text: text,
-                        from: this.clientId
-                    }));
-                }
+            if (this.hubId && this.availablePeers.has(this.hubId)) {
+                this.sendRelay({
+                    text: text,
+                    from: this.room?.selfId
+                }, this.hubId);
             }
         } else if (path && path.length > 0) {
             // Multi-hop routing
             const firstHop = path[0];
-            const channel = this.dataChannels.get(firstHop);
-            if (channel && channel.readyState === 'open') {
-                channel.send(JSON.stringify({
-                    type: 'route',
+            if (this.availablePeers.has(firstHop)) {
+                this.sendRoute({
                     text: text,
-                    originalFrom: this.clientId,
+                    originalFrom: this.room?.selfId,
                     path: path
-                }));
+                }, firstHop);
             }
         } else if (targetId) {
             // Direct message to specific peer
-            const channel = this.dataChannels.get(targetId);
-            if (channel && channel.readyState === 'open') {
-                channel.send(JSON.stringify({
-                    type: 'chat',
+            if (this.availablePeers.has(targetId)) {
+                this.sendChat({
                     text: text,
-                    from: this.clientId,
+                    from: this.room?.selfId,
                     broadcast: false
-                }));
+                }, targetId);
             }
         } else {
             // Broadcast to all connected peers
-            this.dataChannels.forEach((channel, peerId) => {
-                if (channel.readyState === 'open') {
-                    channel.send(JSON.stringify({
-                        type: 'chat',
-                        text: text,
-                        from: this.clientId,
-                        broadcast: true
-                    }));
-                }
+            this.sendChat({
+                text: text,
+                from: this.room?.selfId,
+                broadcast: true
             });
         }
     }
-    
-    sendSignal(targetId, signal) {
-        if (this.ws && this.ws.readyState === WebSocket.OPEN) {
-            this.ws.send(JSON.stringify({
-                type: 'signal',
-                targetId: targetId,
-                fromId: this.clientId,
-                signal: signal
-            }));
-        }
-    }
-    
+
     updateConnections() {
         if (this.onConnectionsUpdate) {
-            const connections = Array.from(this.dataChannels.entries())
-                .filter(([_, channel]) => channel.readyState === 'open')
-                .map(([peerId, _]) => peerId);
+            const connections = Array.from(this.availablePeers);
             this.onConnectionsUpdate(connections);
         }
     }
-    
+
     disconnectAll() {
-        this.peers.forEach((pc, peerId) => {
-            pc.close();
-        });
+        if (this.room) {
+            this.room.leave();
+            this.room = null;
+        }
         this.peers.clear();
         this.dataChannels.clear();
+        this.availablePeers.clear();
         this.isHub = false;
         this.hubId = null;
         this.updateConnections();
+
+        if (this.onStatusChange) {
+            this.onStatusChange('disconnected');
+        }
     }
-    
+
     setScenario(scenario) {
         this.scenario = scenario;
     }
-    
+
     becomeHub() {
         this.isHub = true;
         console.log('This client is now a hub');
     }
-    
+
     getConnectedPeers() {
-        return Array.from(this.dataChannels.entries())
-            .filter(([_, channel]) => channel.readyState === 'open')
-            .map(([peerId, _]) => peerId);
+        return Array.from(this.availablePeers);
     }
+
+    // Get the room's self ID (Trystero peer ID)
+    getSelfId() {
+        return this.room?.selfId || this.clientId;
+    }
+}
+
+// Export for ES modules
+if (typeof window !== 'undefined') {
+    window.WebRTCClient = WebRTCClient;
 }

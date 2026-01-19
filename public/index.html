@@ -10,14 +10,31 @@
     <div class="container">
         <header>
             <h1>WebRTC Peer-to-Peer Graph Demo</h1>
+            <p class="subtitle">Serverless WebRTC using Trystero - No server required</p>
             <div class="client-info">
-                <span>Your Client ID: <strong id="clientId">Connecting...</strong></span>
+                <span>Your Peer ID: <strong id="clientId">Not connected</strong></span>
                 <span class="status" id="status">Disconnected</span>
             </div>
         </header>
 
-        <div class="main-content">
+        <!-- Room Join Section -->
+        <section class="room-section" id="roomSection">
+            <h2>Join a Room</h2>
+            <p>Enter a room name to connect with other peers. Share the same room name with others to communicate.</p>
+            <div class="room-controls">
+                <input type="text" id="roomInput" placeholder="Enter room name..." value="webrtc-demo" />
+                <button id="joinRoomBtn" class="action-btn primary">Join Room</button>
+            </div>
+            <p class="hint">Tip: Open this page in multiple browser tabs with the same room name to test peer connections.</p>
+        </section>
+
+        <div class="main-content" id="mainContent" style="display: none;">
             <div class="left-panel">
+                <section class="room-info">
+                    <h3>Room: <span id="currentRoom">-</span></h3>
+                    <button id="leaveRoomBtn" class="action-btn small">Leave Room</button>
+                </section>
+
                 <section class="scenario-selector">
                     <h2>Select Scenario</h2>
                     <div class="scenarios">
@@ -42,7 +59,7 @@
                 </section>
 
                 <section class="peers-section">
-                    <h3>Available Peers (<span id="peerCount">0</span>)</h3>
+                    <h3>Connected Peers (<span id="peerCount">0</span>)</h3>
                     <div id="peerList" class="peer-list"></div>
                 </section>
 
@@ -53,8 +70,6 @@
 
                 <section class="controls">
                     <h3>Actions</h3>
-                    <button id="connectBtn" class="action-btn">Connect to Peer</button>
-                    <button id="disconnectBtn" class="action-btn">Disconnect All</button>
                     <button id="becomeHubBtn" class="action-btn" style="display:none;">Become Hub</button>
                 </section>
             </div>
@@ -78,6 +93,11 @@
                 </section>
             </div>
         </div>
+
+        <footer>
+            <p>This demo uses <a href="https://github.com/dmotz/trystero" target="_blank">Trystero</a> for serverless WebRTC signaling via Nostr relays.</p>
+            <p>No server required - works entirely in your browser!</p>
+        </footer>
     </div>
 
     <script src="webrtc-client.js"></script>
