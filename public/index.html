@@ -1,0 +1,107 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>WebRTC Graph Demo</title>
+    <link rel="stylesheet" href="styles.css">
+</head>
+<body>
+    <div class="container">
+        <header>
+            <h1>WebRTC Peer-to-Peer Graph Demo</h1>
+            <p class="subtitle">Serverless WebRTC using Trystero - No server required</p>
+            <div class="client-info">
+                <span>Your Peer ID: <strong id="clientId">Not connected</strong></span>
+                <span class="status" id="status">Disconnected</span>
+            </div>
+        </header>
+
+        <!-- Room Join Section -->
+        <section class="room-section" id="roomSection">
+            <h2>Join a Room</h2>
+            <p>Enter a room name to connect with other peers. Share the same room name with others to communicate.</p>
+            <div class="room-controls">
+                <input type="text" id="roomInput" placeholder="Enter room name..." value="webrtc-demo" />
+                <button id="joinRoomBtn" class="action-btn primary">Join Room</button>
+            </div>
+            <p class="hint">Tip: Open this page in multiple browser tabs with the same room name to test peer connections.</p>
+        </section>
+
+        <div class="main-content" id="mainContent" style="display: none;">
+            <div class="left-panel">
+                <section class="room-info">
+                    <h3>Room: <span id="currentRoom">-</span></h3>
+                    <button id="leaveRoomBtn" class="action-btn small">Leave Room</button>
+                </section>
+
+                <section class="scenario-selector">
+                    <h2>Select Scenario</h2>
+                    <div class="scenarios">
+                        <button class="scenario-btn active" data-scenario="direct">
+                            1. Direct P2P
+                        </button>
+                        <button class="scenario-btn" data-scenario="hub">
+                            2. Hub-and-Spoke
+                        </button>
+                        <button class="scenario-btn" data-scenario="mesh">
+                            3. Full Mesh
+                        </button>
+                        <button class="scenario-btn" data-scenario="complex">
+                            4. Complex Graph
+                        </button>
+                    </div>
+                </section>
+
+                <section class="scenario-info">
+                    <h3>Current Scenario: <span id="currentScenario">Direct P2P</span></h3>
+                    <p id="scenarioDescription">Two clients connect directly to each other for peer-to-peer communication.</p>
+                </section>
+
+                <section class="peers-section">
+                    <h3>Connected Peers (<span id="peerCount">0</span>)</h3>
+                    <div id="peerList" class="peer-list"></div>
+                </section>
+
+                <section class="connections-section">
+                    <h3>Active Connections (<span id="connectionCount">0</span>)</h3>
+                    <div id="connectionList" class="connection-list"></div>
+                </section>
+
+                <section class="controls">
+                    <h3>Actions</h3>
+                    <button id="becomeHubBtn" class="action-btn" style="display:none;">Become Hub</button>
+                </section>
+            </div>
+
+            <div class="right-panel">
+                <section class="graph-section">
+                    <h3>Network Topology</h3>
+                    <canvas id="graphCanvas" width="600" height="400"></canvas>
+                </section>
+
+                <section class="messaging-section">
+                    <h3>Messaging</h3>
+                    <div class="message-controls">
+                        <select id="messageTarget" class="message-target">
+                            <option value="broadcast">Broadcast to All</option>
+                        </select>
+                        <input type="text" id="messageInput" placeholder="Type a message..." />
+                        <button id="sendBtn" class="send-btn">Send</button>
+                    </div>
+                    <div id="messageLog" class="message-log"></div>
+                </section>
+            </div>
+        </div>
+
+        <footer>
+            <p>This demo uses <a href="https://github.com/dmotz/trystero" target="_blank">Trystero</a> for serverless WebRTC signaling via Nostr relays.</p>
+            <p>No server required - works entirely in your browser!</p>
+        </footer>
+    </div>
+
+    <script src="webrtc-client.js"></script>
+    <script src="graph-visualizer.js"></script>
+    <script src="app.js"></script>
+</body>
+</html>
